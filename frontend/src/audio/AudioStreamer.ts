@@ -3,6 +3,7 @@ import { ChunkBuilder } from "./ChunkBuilder";
 import { OutgoingQueue } from "./OutgoingQueue";
 
 export class AudioStreamer {
+
   private ws: WebSocket | null = null;
 
   private ringBuffer = new RingBuffer();
@@ -24,26 +25,78 @@ export class AudioStreamer {
   private senderTimer: number | null = null;
 
   async start() {
+
     try {
+
       console.log("START CALLED");
 
       console.log("Requesting microphone...");
 
       this.mediaStream =
         await navigator.mediaDevices.getUserMedia({
-          audio: true,
+
+          audio: {
+
+            echoCancellation: true,
+
+            noiseSuppression: true,
+
+            autoGainControl: true,
+
+            channelCount: 1,
+
+            sampleRate: 16000
+
+          }
+
         });
 
       console.log("Microphone granted");
+
+      //-------------------------------------------------------
+      // Check actual microphone settings
+      //-------------------------------------------------------
+
+      const track =
+        this.mediaStream.getAudioTracks()[0];
+
+      console.log(
+        "Microphone Settings:",
+        track.getSettings()
+      );
+
+      console.log(
+        "Requested Constraints:",
+        track.getConstraints()
+      );
+
+      //-------------------------------------------------------
 
       this.connectWebSocket();
 
       this.audioContext =
         new AudioContext({
-          sampleRate: 16000,
+
+          sampleRate: 16000
+
         });
 
       console.log("AudioContext created");
+
+      console.log(
+        "AudioContext Sample Rate:",
+        this.audioContext.sampleRate
+      );
+
+      console.log(
+        "Microphone Sample Rate:",
+        track.getSettings().sampleRate
+      );
+
+      console.log(
+        "AudioContext Rate:",
+        this.audioContext.sampleRate
+      );
 
       await this.audioContext.audioWorklet.addModule(
         "/mic-processor.js"
@@ -66,13 +119,13 @@ export class AudioStreamer {
 
       console.log("Worklet node created");
 
-      this.worklet.port.onmessage = (
-        event
-      ) => {
+      this.worklet.port.onmessage = (event) => {
+
         const samples =
           event.data as Float32Array;
 
         this.ringBuffer.push(samples);
+
       };
 
       this.source.connect(
@@ -90,46 +143,58 @@ export class AudioStreamer {
       console.log(
         "Streaming started"
       );
-    } catch (error) {
+
+    }
+    catch (error) {
+
       console.error(
         "MIC ERROR:",
         error
       );
+
     }
+
   }
 
   private connectWebSocket() {
+
     this.ws =
       new WebSocket(
-        "ws://localhost:8000"
+        "ws://192.168.1.40:8000"
       );
 
     this.ws.binaryType =
       "arraybuffer";
 
     this.ws.onopen = () => {
+
       console.log(
         "WebSocket Connected"
       );
+
     };
 
     this.ws.onclose = () => {
+
       console.log(
         "WebSocket Closed"
       );
+
     };
 
-    this.ws.onerror = (
-      error
-    ) => {
+    this.ws.onerror = (error) => {
+
       console.error(
         "WebSocket Error:",
         error
       );
+
     };
+
   }
 
   private startChunkBuilder() {
+
     this.chunkBuilderTimer =
       window.setInterval(() => {
 
@@ -155,9 +220,11 @@ export class AudioStreamer {
           console.log(
             "Chunk Created"
           );
+
         }
 
       }, 20);
+
   }
 
   private startSender() {
@@ -167,8 +234,7 @@ export class AudioStreamer {
 
         if (
           !this.ws ||
-          this.ws.readyState !==
-            WebSocket.OPEN
+          this.ws.readyState !== WebSocket.OPEN
         ) {
           return;
         }
@@ -187,6 +253,7 @@ export class AudioStreamer {
         );
 
       }, 10);
+
   }
 
   public stop() {
@@ -195,64 +262,57 @@ export class AudioStreamer {
       "Stopping stream..."
     );
 
-    if (
-      this.chunkBuilderTimer
-    ) {
+    if (this.chunkBuilderTimer) {
+
       clearInterval(
         this.chunkBuilderTimer
       );
 
-      this.chunkBuilderTimer =
-        null;
+      this.chunkBuilderTimer = null;
+
     }
 
-    if (
-      this.senderTimer
-    ) {
+    if (this.senderTimer) {
+
       clearInterval(
         this.senderTimer
       );
 
-      this.senderTimer =
-        null;
+      this.senderTimer = null;
+
     }
 
     this.worklet?.disconnect();
 
     this.source?.disconnect();
 
-    if (
-      this.mediaStream
-    ) {
+    if (this.mediaStream) {
 
       this.mediaStream
         .getTracks()
         .forEach(
-          (track) =>
-            track.stop()
+          track => track.stop()
         );
 
-      this.mediaStream =
-        null;
+      this.mediaStream = null;
+
     }
 
-    if (
-      this.audioContext
-    ) {
+    if (this.audioContext) {
 
       this.audioContext.close();
 
-      this.audioContext =
-        null;
+      this.audioContext = null;
+
     }
 
     if (
       this.ws &&
-      this.ws.readyState ===
-        WebSocket.OPEN
+      this.ws.readyState === WebSocket.OPEN
     ) {
 
       this.ws.close();
+
     }
 
     this.ws = null;
@@ -260,5 +320,7 @@ export class AudioStreamer {
     console.log(
       "Streaming stopped"
     );
+
   }
+
 }
